@@ -53,6 +53,7 @@ node scripts/detect-nav-framework.mjs --dir "$SRC"
 # -> xml
 
 node scripts/extract-nav-graph.mjs --dir "$SRC/res/navigation" --out /tmp/nav.json
+node scripts/extract-code-nav.mjs --nav-json /tmp/nav.json --src "$SRC" --out /tmp/nav.json
 node scripts/extract-xml-ui.mjs --dir "$SRC/res/layout" --out /tmp/ui.json
 node scripts/resolve-button-actions.mjs --nav-json /tmp/nav.json --xml-ui-json /tmp/ui.json --dir "$MODULE" --out /tmp/buttons.json
 node scripts/render-flow-wireframes.mjs --nav-json /tmp/nav.json --xml-ui-json /tmp/ui.json --buttons-json /tmp/buttons.json --title "Sample App HLD" --out /tmp/hld.html

@@ -26,6 +26,7 @@ order; this file is the "how" behind each step.
 | `detect-nav-framework.mjs` | file-count heuristic (`*NavKey.kt` vs `res/navigation/*.xml`) | `nav3` \| `xml` \| `unknown` (stdout) | stable |
 | `extract-nav3.mjs` | Jetpack Navigation 3 (`NavKey`, `EntryProvider`, `entry<X>{}`) | nav graph JSON | stable |
 | `extract-nav-graph.mjs` | classic Navigation Component XML | nav graph JSON | stable |
+| `extract-code-nav.mjs` | nav ids referenced in code, `Intent`/Activity factories, Activity→graph hosting, optional `.hld-rules.json` | same nav graph JSON + code edges with `rule`/`evidence`, plus a census of unresolved nav-like calls | new |
 | `extract-xml-ui.mjs` | XML layout tag names (primary), ID-suffix convention (secondary) | per-screen UI element JSON | stable |
 | `resolve-button-actions.mjs` | `setOnClickListener` + Safe Args `Directions`/raw `navigate(R.id...)` | per-screen button→action JSON | stable |
 | `resolve-api-chain-paths.mjs` | `Fragment → ViewModel → UseCase → Repository → Service` naming convention | per-screen candidate file paths | convention-dependent, degrades safely otherwise |
@@ -66,6 +67,33 @@ file, plus `startDestination` per file. De-dupes nodes by `id` across files
 (not `file::id` — a real cross-file duplicate screen reference is still a
 duplicate, not a distinct node). Reports `orphanNodes` the same way as
 `extract-nav3.mjs`.
+
+### `extract-code-nav.mjs`
+
+`<action>` tags only show navigation declared in XML. Real apps also navigate
+from Kotlin: host Activities that switch fragments on a state value, wrapper
+helpers around `navigate()`, and Activity launches. This script adds those
+edges to the XML graph with standard Android rules that need no configuration:
+
+- **id-ref / id-mention**: the nav graph already says which ids are
+  navigation (every action id and destination id), so any code reference to
+  one is an edge from the screen that owns the file. This is what catches
+  team-specific wrappers such as `next(R.id.action_x)`. Comparisons (`== R.id.x`)
+  and `pop*`/`find*` calls are skipped.
+- **intent / activity-factory**: `Intent(…, X::class.java)` and
+  `XActivity.start(…)`/`.newIntent(…)`-style companion factories.
+- **hosts-graph**: an Activity that inflates `R.navigation.g` or whose layout
+  declares `app:navGraph` gets an edge to that graph's start destination.
+
+A file's owner is the screen named like the file; `XViewModel` belongs to
+`XFragment` or `XActivity`. Calls in abstract/open base classes or other
+non-screen files are counted as `unattributedMatches`, not guessed.
+
+`codeNav.unmatchedNavCalls` is the Step 0 census: navigation-looking calls
+into code outside the module whose arguments carry no static target, grouped
+and counted with example locations. On a real 45K-line feature module this
+came to 4 call sites, and those are the only lines an LLM needs to read to
+decide whether a team rule (`--rules .hld-rules.json`) is worth adding.
 
 ### `extract-xml-ui.mjs`
 

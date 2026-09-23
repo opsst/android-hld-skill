@@ -59,6 +59,34 @@ render step writes HTML); chain the outputs together as shown.
      the project uses, or look at a couple of representative screens
      together with them.
 
+   **Then, for `xml`, add the navigation that lives in code** — most real apps
+   navigate from Kotlin too (Activity launches, state-driven hosts, wrapper
+   helpers), which `<action>` tags never show:
+   ```bash
+   node scripts/extract-code-nav.mjs --nav-json nav.json --src <module>/src/main [--rules <repo>/.hld-rules.json] --out nav.json
+   ```
+   Built-in rules cover standard Android patterns with no configuration: any
+   code reference to an id the nav graph declares (so team wrappers like
+   `next(R.id.action_x)` are caught automatically), `Intent(…, X::class.java)`,
+   `XActivity.start(…)`-style factories, and Activities hosting a nav graph.
+   Every added edge carries `rule` and `evidence` (`file:line`). Use this merged
+   `nav.json` for every step below.
+
+   **Step 0 — review the census, once per repo.** The output's
+   `codeNav.unmatchedNavCalls` lists navigation-looking calls no rule could
+   resolve, grouped and counted with example locations. Read **only those
+   example lines** — never the module at large — and classify each group:
+   - target decided at runtime (`navigate(state.destId)`) → leave it; report
+     it as unresolved.
+   - a repeated team convention the built-ins don't know → propose a rule for
+     the analyzed repo's `.hld-rules.json` (`{"navigate": [{"name", "pattern"
+     (one capture group), "capture": "actionId" | "destinationId" |
+     "className"}]}`), show it to the user, and rerun with `--rules` once they
+     accept. The rules file belongs in the analyzed repo, never in this skill.
+   - not navigation at all (a name that merely contains "navigate") → ignore.
+   After that, answer flow questions from the JSON; don't reopen source files
+   to "double-check" edges the extractor already cites.
+
 3. **Extract UI elements per screen** (XML/ViewBinding layouts only — see
    Limitations below for Compose):
    ```bash
