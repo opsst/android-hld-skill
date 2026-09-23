@@ -1,0 +1,75 @@
+{
+  "generatedBy": "extract-nav3.mjs (deterministic, no LLM) — Navigation 3 convention parser",
+  "sourceDir": "/Users/a667157/Documents/GitHub/_refs/nowinandroid",
+  "screenCount": 5,
+  "edgeCount": 6,
+  "unresolvedCount": 0,
+  "orphanCount": 0,
+  "nodes": [
+    {
+      "id": "ForYouNavKey",
+      "module": "foryou",
+      "sourceFile": "feature/foryou/api/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/api/navigation/ForYouNavKey.kt"
+    },
+    {
+      "id": "TopicNavKey",
+      "module": "topic",
+      "sourceFile": "feature/topic/api/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/topic/api/navigation/TopicNavKey.kt"
+    },
+    {
+      "id": "SearchNavKey",
+      "module": "search",
+      "sourceFile": "feature/search/api/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/search/api/navigation/SearchNavKey.kt"
+    },
+    {
+      "id": "BookmarksNavKey",
+      "module": "bookmarks",
+      "sourceFile": "feature/bookmarks/api/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/bookmarks/api/navigation/BookmarksNavKey.kt"
+    },
+    {
+      "id": "InterestsNavKey",
+      "module": "interests",
+      "sourceFile": "feature/interests/api/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/interests/api/navigation/InterestsNavKey.kt"
+    }
+  ],
+  "edges": [
+    {
+      "from": "ForYouNavKey",
+      "to": "TopicNavKey",
+      "via": "onTopicClick",
+      "sourceFile": "feature/foryou/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/foryou/impl/navigation/ForYouEntryProvider.kt"
+    },
+    {
+      "from": "TopicNavKey",
+      "to": "TopicNavKey",
+      "via": "onTopicClick",
+      "sourceFile": "feature/topic/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/topic/impl/navigation/TopicEntryProvider.kt"
+    },
+    {
+      "from": "SearchNavKey",
+      "to": "TopicNavKey",
+      "via": "onTopicClick",
+      "sourceFile": "feature/search/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/search/impl/navigation/SearchEntryProvider.kt"
+    },
+    {
+      "from": "SearchNavKey",
+      "to": "InterestsNavKey",
+      "via": "onInterestsClick",
+      "sourceFile": "feature/search/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/search/impl/navigation/SearchEntryProvider.kt"
+    },
+    {
+      "from": "BookmarksNavKey",
+      "to": "TopicNavKey",
+      "via": "onTopicClick",
+      "sourceFile": "feature/bookmarks/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/bookmarks/impl/navigation/BookmarksEntryProvider.kt"
+    },
+    {
+      "from": "InterestsNavKey",
+      "to": "TopicNavKey",
+      "via": "onTopicClick",
+      "sourceFile": "feature/interests/impl/src/main/kotlin/com/google/samples/apps/nowinandroid/feature/interests/impl/navigation/InterestsEntryProvider.kt"
+    }
+  ],
+  "unresolved": [],
+  "orphanNodes": []
+}

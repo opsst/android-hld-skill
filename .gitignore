@@ -1,0 +1,10 @@
+node_modules/
+*.log
+.DS_Store
+
+# extraction/render output written by the pipeline is scratch, not source —
+# nothing under a working directory named this should be committed
+data/generated/
+*.nav.json
+*.nav3.json
+!examples/*.json

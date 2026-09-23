@@ -1,0 +1,21 @@
+{
+  "name": "android-hld-skill",
+  "version": "1.0.0",
+  "description": "Deterministic HLD (High-Level Design) generator for Android apps — a Claude Code Skill",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "claude-skill",
+    "android",
+    "hld",
+    "architecture-diagram",
+    "navigation-graph"
+  ],
+  "dependencies": {
+    "fast-xml-parser": "^5.11.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
