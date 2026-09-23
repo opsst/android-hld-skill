@@ -4,6 +4,10 @@
   "description": "Deterministic HLD (High-Level Design) generator for Android apps — a Claude Code Skill",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/opsst/android-hld-skill.git"
+  },
   "keywords": [
     "claude-code",
     "claude-skill",

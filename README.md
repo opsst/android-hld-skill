@@ -27,13 +27,13 @@ way to explore the repo. See `SKILL.md` for the full pipeline and
 ## Install
 
 ```bash
-npx skills add <your-username>/android-hld-skill -g
+npx skills add opsst/android-hld-skill -g
 ```
 
 Or clone it directly and run the scripts with plain Node (18+):
 
 ```bash
-git clone https://github.com/<your-username>/android-hld-skill.git
+git clone https://github.com/opsst/android-hld-skill.git
 cd android-hld-skill
 npm install
 ```
