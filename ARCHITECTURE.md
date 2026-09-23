@@ -26,13 +26,16 @@ order; this file is the "how" behind each step.
 | `detect-nav-framework.mjs` | file-count heuristic (`*NavKey.kt` vs `res/navigation/*.xml`) | `nav3` \| `xml` \| `unknown` (stdout) | stable |
 | `extract-nav3.mjs` | Jetpack Navigation 3 (`NavKey`, `EntryProvider`, `entry<X>{}`) | nav graph JSON | stable |
 | `extract-nav-graph.mjs` | classic Navigation Component XML | nav graph JSON | stable |
-| `extract-code-nav.mjs` | nav ids referenced in code, `Intent`/Activity factories, Activity→graph hosting, optional `.hld-rules.json` | same nav graph JSON + code edges with `rule`/`evidence`, plus a census of unresolved nav-like calls | new |
+| `extract-code-nav.mjs` | nav ids referenced in code, `Intent`/Activity factories, Activity→graph hosting, FragmentManager transactions, optional `.hld-rules.json` | same nav graph JSON + code edges with `rule`/`evidence`, plus a census of unresolved nav-like calls | new |
 | `extract-xml-ui.mjs` | XML layout tag names (primary), ID-suffix convention (secondary) | per-screen UI element JSON | stable |
 | `resolve-button-actions.mjs` | `setOnClickListener` + Safe Args `Directions`/raw `navigate(R.id...)` | per-screen button→action JSON | stable |
 | `resolve-api-chain-paths.mjs` | `Fragment → ViewModel → UseCase → Repository → Service` naming convention | per-screen candidate file paths | convention-dependent, degrades safely otherwise |
 | `render-flow-wireframes.mjs` | (consumes the above) | single interactive HTML canvas | stable, **recommended default output** |
 | `render-wireframe.mjs` | (consumes the above) | per-screen wireframe gallery HTML | stable, standalone alternative |
 | `to-archify.mjs` | (consumes nav + buttons) | archify `workflow` schema draft JSON | stable; requires the separate `archify` skill to actually render |
+| `layout-flows.mjs` | (consumes nav) | per-flow layered layout: card positions + edge bend points | new; used by `render-flow-wireframes.mjs` |
+| `to-hldgen-bundle.mjs` | (consumes nav + ui + buttons) | HLDGen bundle JSON for the iOS HLDGen Figma plugin | new |
+| `get-hldgen-plugin.mjs` | — | HLDGen checkout at a pinned commit under `.cache/HLDGen` (fetched, not vendored: HLDGen has no license yet) | new |
 
 ## Per-script notes
 
@@ -84,6 +87,14 @@ edges to the XML graph with standard Android rules that need no configuration:
   `XActivity.start(…)`/`.newIntent(…)`-style companion factories.
 - **hosts-graph**: an Activity that inflates `R.navigation.g` or whose layout
   declares `app:navGraph` gets an edge to that graph's start destination.
+- **fragment-transaction**: FragmentManager `replace`/`add` that is part of a
+  transaction (chained off `beginTransaction()`, or inside `commit { }` /
+  `beginTransaction().apply { }`), with the Fragment given as a constructor,
+  `newInstance(…)`, `::class.java`, KTX `replace<X>()`, or a variable whose
+  declaration in the same file names the type. A `replace`/`add` that only sits
+  *near* a transaction (`list.add(i, x)`) is not counted. A Fragment passed in
+  from elsewhere (a parameter) goes to the census. This rule works without a nav
+  graph, so `--nav-json` is optional.
 
 A file's owner is the screen named like the file; `XViewModel` belongs to
 `XFragment` or `XActivity`. Calls in abstract/open base classes or other
@@ -145,11 +156,36 @@ targeted, few-file read) — deliberately not automated further, since that
 would mean guessing at semantics this script has no deterministic way to
 verify.
 
+### `layout-flows.mjs`
+
+Deterministic layered (Sugiyama-style) layout. Drawing a whole module as one
+graph is what tangles lines, so it first splits screens into flows, one per
+nav graph file:
+- A screen declared in several graphs joins the one whose `<action>`s touch
+  it most.
+- An Activity or code-only screen joins the flow it sends the most edges
+  into; `hosts-graph` edges weigh ×10.
+- Anything left goes into an `app` flow.
+
+Per flow:
+1. DFS finds back edges (loops); they are routed as lanes under the flow
+   instead of against it.
+2. Longest-path layering puts every forward edge pointing right.
+3. Dummy nodes carry edges that span several layers.
+4. 12 barycenter sweeps order each column to minimise crossings.
+5. Destinations in another flow become ghost cards in a last column.
+
+Each column is as wide as its widest card. The output holds every card's
+position and every edge's bend points, plus a `crossings` count per flow,
+the number the layout exists to minimise. It dropped from 28 to 2 on a real
+10-flow module. `--preview` writes a name-card HTML for checking the layout
+alone; it has no wireframes or hover.
+
 ### `render-flow-wireframes.mjs`
 
-Lays out screens by BFS depth from the nav graph's `startDestination` (same
-column logic as `to-archify.mjs`), but instead of a plain labeled node,
-renders each screen's actual wireframe (built from `extract-xml-ui.mjs`
+Positions come from `layout-flows.mjs` (one diagram per flow, stacked top to
+bottom), with each card sized to its wireframe's real height. Instead of a
+plain labeled node, renders each screen's actual wireframe (built from `extract-xml-ui.mjs`
 element data) using a palette and type styling deliberately modeled on a
 real archify `deliver`-ed HTML's design tokens (slate background, cyan glow
 cards, JetBrains Mono chrome type, pill edge labels) — not archify's own
@@ -161,6 +197,23 @@ embedded `window.__META__` JSON payload, never invented text), and SVG/PNG
 export (clones the `<svg>` canvas, strips the pan/zoom transform, and either
 serializes it directly or rasterizes it via an offscreen `<canvas>` at 2x
 scale).
+
+### `to-hldgen-bundle.mjs`
+
+Writes the `{ module, scenes[] }` bundle that
+[HLDGen](https://github.com/Ntpstv/HLDGen)'s Figma plugin imports, so Android
+and iOS HLDs come out of one renderer. Each nav node becomes a scene whose
+`group` (the plugin's journey) is its flow from `layout-flows.mjs`'s
+`assignFlows`. Each outgoing edge becomes an `actionChain`, named after the
+button that triggers it, else the `<action>` id, else the code rule. The
+target class goes in `resolvedDestinations`.
+
+The plugin resolves a destination to the first scene whose class name the
+string contains, so scenes are written longest class name first: the exact
+class always wins over a shorter suffix such as `EditFragment` inside
+`ProfileEditFragment`. Layout elements are stacked into `xibs[0].nodes`
+because Android XML carries no absolute frames. `apiEndpoints`,
+`notifications` and `localStorage` stay empty, not guessed.
 
 ### `to-archify.mjs`
 

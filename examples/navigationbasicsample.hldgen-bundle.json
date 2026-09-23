@@ -1,0 +1,749 @@
+{
+  "module": "NavigationBasicSample",
+  "scenes": [
+    {
+      "id": "results_winner",
+      "name": "ResultsWinner",
+      "module": "NavigationBasicSample",
+      "group": "navigation",
+      "navigationTitle": "",
+      "navigationTitleKey": "",
+      "navigationBarHidden": false,
+      "notifications": [],
+      "localStorage": [],
+      "viewControllers": [
+        "ResultsWinner"
+      ],
+      "interactors": [],
+      "presenters": [],
+      "routers": [],
+      "workers": [],
+      "routesTo": [],
+      "servicesUsed": [],
+      "actionChains": [
+        {
+          "action": "Leaderboards",
+          "kind": "button",
+          "file": "navigation.xml",
+          "calls": [],
+          "vcRoutes": [],
+          "emittedCases": [],
+          "resolvedDestinations": [
+            "Leaderboard"
+          ]
+        }
+      ],
+      "xibs": [
+        {
+          "source": "layout",
+          "vcClass": "ResultsWinner",
+          "file": "res/layout/fragment_results_winner.xml",
+          "width": 360,
+          "height": 344,
+          "nodes": [
+            {
+              "type": "label",
+              "color": "#C7CEDE",
+              "label": "Congratulations!",
+              "x": 16,
+              "y": 16,
+              "w": 328,
+              "h": 20,
+              "children": []
+            },
+            {
+              "type": "button",
+              "color": "#4D8FFF",
+              "label": "Next Match",
+              "x": 16,
+              "y": 48,
+              "w": 328,
+              "h": 44,
+              "children": []
+            },
+            {
+              "type": "button",
+              "color": "#4D8FFF",
+              "label": "Leaderboards",
+              "x": 16,
+              "y": 104,
+              "w": 328,
+              "h": 44,
+              "children": []
+            },
+            {
+              "type": "image",
+              "color": "#F5C518",
+              "label": "title_image3",
+              "x": 16,
+              "y": 160,
+              "w": 328,
+              "h": 120,
+              "children": []
+            }
+          ],
+          "outlets": [],
+          "actions": []
+        }
+      ],
+      "apiEndpoints": []
+    },
+    {
+      "id": "MainActivity",
+      "name": "MainActivity",
+      "module": "NavigationBasicSample",
+      "group": "navigation",
+      "navigationTitle": "",
+      "navigationTitleKey": "",
+      "navigationBarHidden": false,
+      "notifications": [],
+      "localStorage": [],
+      "viewControllers": [
+        "MainActivity"
+      ],
+      "interactors": [],
+      "presenters": [],
+      "routers": [],
+      "workers": [],
+      "routesTo": [],
+      "servicesUsed": [],
+      "actionChains": [
+        {
+          "action": "hosts nav graph",
+          "kind": "code:hosts-graph",
+          "file": "java/com/example/android/navigationsample/MainActivity.kt:1",
+          "calls": [],
+          "vcRoutes": [],
+          "emittedCases": [],
+          "resolvedDestinations": [
+            "TitleScreen"
+          ]
+        }
+      ],
+      "xibs": [
+        {
+          "source": "layout",
+          "vcClass": "MainActivity",
+          "file": "",
+          "width": 360,
+          "height": 344,
+          "nodes": [
+            {
+              "type": "label",
+              "color": "#8B93A7",
+              "label": "no layout linked",
+              "x": 16,
+              "y": 16,
+              "w": 300,
+              "h": 20,
+              "children": []
+            }
+          ],
+          "outlets": [],
+          "actions": []
+        }
+      ],
+      "apiEndpoints": []
+    },
+    {
+      "id": "title_screen",
+      "name": "TitleScreen",
+      "module": "NavigationBasicSample",
+      "group": "navigation",
+      "navigationTitle": "",
+      "navigationTitleKey": "",
+      "navigationBarHidden": false,
+      "notifications": [],
+      "localStorage": [],
+      "viewControllers": [
+        "TitleScreen"
+      ],
+      "interactors": [],
+      "presenters": [],
+      "routers": [],
+      "workers": [],
+      "routesTo": [],
+      "servicesUsed": [],
+      "actionChains": [
+        {
+          "action": "Play",
+          "kind": "button",
+          "file": "navigation.xml",
+          "calls": [],
+          "vcRoutes": [],
+          "emittedCases": [],
+          "resolvedDestinations": [
+            "Register"
+          ]
+        },
+        {
+          "action": "Leaderboards",
+          "kind": "button",
+          "file": "navigation.xml",
+          "calls": [],
+          "vcRoutes": [],
+          "emittedCases": [],
+          "resolvedDestinations": [
+            "Leaderboard"
+          ]
+        }
+      ],
+      "xibs": [
+        {
+          "source": "layout",
+          "vcClass": "TitleScreen",
+          "file": "res/layout/fragment_title_screen.xml",
+          "width": 360,
+          "height": 344,
+          "nodes": [
+            {
+              "type": "label",
+              "color": "#C7CEDE",
+              "label": "Trivia!",
+              "x": 16,
+              "y": 16,
+              "w": 328,
+              "h": 20,
+              "children": []
+            },
+            {
+              "type": "button",
+              "color": "#4D8FFF",
+              "label": "Play",
+              "x": 16,
+              "y": 48,
+              "w": 328,
+              "h": 44,
+              "children": []
+            },
+            {
+              "type": "button",
+              "color": "#4D8FFF",
+              "label": "Leaderboards",
+              "x": 16,
+              "y": 104,
+              "w": 328,
+              "h": 44,
+              "children": []
+            },
+            {
+              "type": "image",
+              "color": "#F5C518",
+              "label": "title_image",
+              "x": 16,
+              "y": 160,
+              "w": 328,
+              "h": 120,
+              "children": []
+            }
+          ],
+          "outlets": [],
+          "actions": []
+        }
+      ],
+      "apiEndpoints": []
+    },
+    {
+      "id": "leaderboard",
+      "name": "Leaderboard",
+      "module": "NavigationBasicSample",
+      "group": "navigation",
+      "navigationTitle": "",
+      "navigationTitleKey": "",
+      "navigationBarHidden": false,
+      "notifications": [],
+      "localStorage": [],
+      "viewControllers": [
+        "Leaderboard"
+      ],
+      "interactors": [],
+      "presenters": [],
+      "routers": [],
+      "workers": [],
+      "routesTo": [],
+      "servicesUsed": [],
+      "actionChains": [
+        {
+          "action": "action_leaderboard_to_userProfile",
+          "kind": "nav-action",
+          "file": "navigation.xml",
+          "calls": [],
+          "vcRoutes": [],
+          "emittedCases": [],
+          "resolvedDestinations": [
+            "UserProfile"
+          ]
+        }
+      ],
+      "xibs": [
+        {
+          "source": "layout",
+          "vcClass": "Leaderboard",
+          "file": "res/layout/fragment_leaderboard.xml",
+          "width": 360,
+          "height": 344,
+          "nodes": [
+            {
+              "type": "list",
+              "color": "#5C6B8A",
+              "label": "leaderboard_list",
+              "x": 16,
+              "y": 16,
+              "w": 328,
+              "h": 180,
+              "children": []
+            }
+          ],
+          "outlets": [],
+          "actions": []
+        }
+      ],
+      "apiEndpoints": []
+    },
+    {
+      "id": "user_profile",
+      "name": "UserProfile",
+      "module": "NavigationBasicSample",
+      "group": "navigation",
+      "navigationTitle": "",
+      "navigationTitleKey": "",
+      "navigationBarHidden": false,
+      "notifications": [],
+      "localStorage": [],
+      "viewControllers": [
+        "UserProfile"
+      ],
+      "interactors": [],
+      "presenters": [],
+      "routers": [],
+      "workers": [],
+      "routesTo": [],
+      "servicesUsed": [],
+      "actionChains": [],
+      "xibs": [
+        {
+          "source": "layout",
+          "vcClass": "UserProfile",
+          "file": "res/layout/fragment_user_profile.xml",
+          "width": 360,
+          "height": 344,
+          "nodes": [
+            {
+              "type": "image",
+              "color": "#F5C518",
+              "label": "imageView7",
+              "x": 16,
+              "y": 16,
+              "w": 328,
+              "h": 120,
+              "children": []
+            },
+            {
+              "type": "label",
+              "color": "#C7CEDE",
+              "label": "Ali Connors",
+              "x": 16,
+              "y": 148,
+              "w": 328,
+              "h": 20,
+              "children": []
+            }
+          ],
+          "outlets": [],
+          "actions": []
+        }
+      ],
+      "apiEndpoints": []
+    },
+    {
+      "id": "register",
+      "name": "Register",
+      "module": "NavigationBasicSample",
+      "group": "navigation",
+      "navigationTitle": "",
+      "navigationTitleKey": "",
+      "navigationBarHidden": false,
+      "notifications": [],
+      "localStorage": [],
+      "viewControllers": [
+        "Register"
+      ],
+      "interactors": [],
+      "presenters": [],
+      "routers": [],
+      "workers": [],
+      "routesTo": [],
+      "servicesUsed": [],
+      "actionChains": [
+        {
+          "action": "sign up",
+          "kind": "button",
+          "file": "navigation.xml",
+          "calls": [],
+          "vcRoutes": [],
+          "emittedCases": [],
+          "resolvedDestinations": [
+            "Match"
+          ]
+        }
+      ],
+      "xibs": [
+        {
+          "source": "layout",
+          "vcClass": "Register",
+          "file": "res/layout/fragment_register.xml",
+          "width": 360,
+          "height": 344,
+          "nodes": [
+            {
+              "type": "label",
+              "color": "#C7CEDE",
+              "label": "Select an Avatar",
+              "x": 16,
+              "y": 16,
+              "w": 328,
+              "h": 20,
+              "children": []
+            },
+            {
+              "type": "view",
+              "color": "#8B93A7",
+              "label": "username_text",
+              "x": 16,
+              "y": 48,
+              "w": 328,
+              "h": 44,
+              "children": [
+                {
+                  "type": "label",
+                  "color": "#8B93A7",
+                  "label": "username_text",
+                  "x": 26,
+                  "y": 60,
+                  "w": 200,
+                  "h": 20,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "view",
+              "color": "#8B93A7",
+              "label": "email_text",
+              "x": 16,
+              "y": 104,
+              "w": 328,
+              "h": 44,
+              "children": [
+                {
+                  "type": "label",
+                  "color": "#8B93A7",
+                  "label": "email_text",
+                  "x": 26,
+                  "y": 116,
+                  "w": 200,
+                  "h": 20,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "view",
+              "color": "#8B93A7",
+              "label": "password_text",
+              "x": 16,
+              "y": 160,
+              "w": 328,
+              "h": 44,
+              "children": [
+                {
+                  "type": "label",
+                  "color": "#8B93A7",
+                  "label": "password_text",
+                  "x": 26,
+                  "y": 172,
+                  "w": 200,
+                  "h": 20,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "button",
+              "color": "#4D8FFF",
+              "label": "sign up",
+              "x": 16,
+              "y": 216,
+              "w": 328,
+              "h": 44,
+              "children": []
+            }
+          ],
+          "outlets": [],
+          "actions": []
+        }
+      ],
+      "apiEndpoints": []
+    },
+    {
+      "id": "game_over",
+      "name": "GameOver",
+      "module": "NavigationBasicSample",
+      "group": "navigation",
+      "navigationTitle": "",
+      "navigationTitleKey": "",
+      "navigationBarHidden": false,
+      "notifications": [],
+      "localStorage": [],
+      "viewControllers": [
+        "GameOver"
+      ],
+      "interactors": [],
+      "presenters": [],
+      "routers": [],
+      "workers": [],
+      "routesTo": [],
+      "servicesUsed": [],
+      "actionChains": [],
+      "xibs": [
+        {
+          "source": "layout",
+          "vcClass": "GameOver",
+          "file": "res/layout/fragment_game_over.xml",
+          "width": 360,
+          "height": 344,
+          "nodes": [
+            {
+              "type": "label",
+              "color": "#C7CEDE",
+              "label": "Game Over",
+              "x": 16,
+              "y": 16,
+              "w": 328,
+              "h": 20,
+              "children": []
+            },
+            {
+              "type": "button",
+              "color": "#4D8FFF",
+              "label": "Try Again?",
+              "x": 16,
+              "y": 48,
+              "w": 328,
+              "h": 44,
+              "children": []
+            }
+          ],
+          "outlets": [],
+          "actions": []
+        }
+      ],
+      "apiEndpoints": []
+    },
+    {
+      "id": "in_game",
+      "name": "InGame",
+      "module": "NavigationBasicSample",
+      "group": "navigation",
+      "navigationTitle": "Game",
+      "navigationTitleKey": "",
+      "navigationBarHidden": false,
+      "notifications": [],
+      "localStorage": [],
+      "viewControllers": [
+        "InGame"
+      ],
+      "interactors": [],
+      "presenters": [],
+      "routers": [],
+      "workers": [],
+      "routesTo": [],
+      "servicesUsed": [],
+      "actionChains": [
+        {
+          "action": "action_in_game_to_resultsWinner",
+          "kind": "nav-action",
+          "file": "navigation.xml",
+          "calls": [],
+          "vcRoutes": [],
+          "emittedCases": [],
+          "resolvedDestinations": [
+            "ResultsWinner"
+          ]
+        },
+        {
+          "action": "action_in_game_to_gameOver",
+          "kind": "nav-action",
+          "file": "navigation.xml",
+          "calls": [],
+          "vcRoutes": [],
+          "emittedCases": [],
+          "resolvedDestinations": [
+            "GameOver"
+          ]
+        }
+      ],
+      "xibs": [
+        {
+          "source": "layout",
+          "vcClass": "InGame",
+          "file": "res/layout/fragment_in_game.xml",
+          "width": 360,
+          "height": 344,
+          "nodes": [
+            {
+              "type": "image",
+              "color": "#F5C518",
+              "label": "title_image2",
+              "x": 16,
+              "y": 16,
+              "w": 328,
+              "h": 120,
+              "children": []
+            },
+            {
+              "type": "label",
+              "color": "#C7CEDE",
+              "label": "How many kilometers are in a marathon?",
+              "x": 16,
+              "y": 148,
+              "w": 328,
+              "h": 20,
+              "children": []
+            },
+            {
+              "type": "label",
+              "color": "#C7CEDE",
+              "label": "22",
+              "x": 16,
+              "y": 180,
+              "w": 328,
+              "h": 24,
+              "children": []
+            },
+            {
+              "type": "label",
+              "color": "#C7CEDE",
+              "label": "75",
+              "x": 16,
+              "y": 216,
+              "w": 328,
+              "h": 24,
+              "children": []
+            },
+            {
+              "type": "label",
+              "color": "#C7CEDE",
+              "label": "42",
+              "x": 16,
+              "y": 252,
+              "w": 328,
+              "h": 24,
+              "children": []
+            },
+            {
+              "type": "label",
+              "color": "#C7CEDE",
+              "label": "10",
+              "x": 16,
+              "y": 288,
+              "w": 328,
+              "h": 24,
+              "children": []
+            }
+          ],
+          "outlets": [],
+          "actions": []
+        }
+      ],
+      "apiEndpoints": []
+    },
+    {
+      "id": "match",
+      "name": "Match",
+      "module": "NavigationBasicSample",
+      "group": "navigation",
+      "navigationTitle": "",
+      "navigationTitleKey": "",
+      "navigationBarHidden": false,
+      "notifications": [],
+      "localStorage": [],
+      "viewControllers": [
+        "Match"
+      ],
+      "interactors": [],
+      "presenters": [],
+      "routers": [],
+      "workers": [],
+      "routesTo": [],
+      "servicesUsed": [],
+      "actionChains": [
+        {
+          "action": "Start",
+          "kind": "button",
+          "file": "navigation.xml",
+          "calls": [],
+          "vcRoutes": [],
+          "emittedCases": [],
+          "resolvedDestinations": [
+            "InGame"
+          ]
+        }
+      ],
+      "xibs": [
+        {
+          "source": "layout",
+          "vcClass": "Match",
+          "file": "res/layout/fragment_match.xml",
+          "width": 360,
+          "height": 384,
+          "nodes": [
+            {
+              "type": "button",
+              "color": "#4D8FFF",
+              "label": "Start",
+              "x": 16,
+              "y": 16,
+              "w": 328,
+              "h": 44,
+              "children": []
+            },
+            {
+              "type": "image",
+              "color": "#F5C518",
+              "label": "imageView9",
+              "x": 16,
+              "y": 72,
+              "w": 328,
+              "h": 120,
+              "children": []
+            },
+            {
+              "type": "image",
+              "color": "#F5C518",
+              "label": "imageView8",
+              "x": 16,
+              "y": 204,
+              "w": 328,
+              "h": 120,
+              "children": []
+            },
+            {
+              "type": "label",
+              "color": "#C7CEDE",
+              "label": "VS",
+              "x": 16,
+              "y": 336,
+              "w": 328,
+              "h": 20,
+              "children": []
+            }
+          ],
+          "outlets": [],
+          "actions": []
+        }
+      ],
+      "apiEndpoints": []
+    }
+  ]
+}

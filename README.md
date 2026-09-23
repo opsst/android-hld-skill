@@ -61,9 +61,11 @@ node scripts/render-flow-wireframes.mjs --nav-json /tmp/nav.json --xml-ui-json /
 open /tmp/hld.html   # or just double-click it
 ```
 
-You get a single HTML file: every screen positioned by its place in the
-navigation flow, drawn as its actual wireframe (not a placeholder box),
-connected by arrows labeled with the button that triggers each one. Hover a
+You get a single HTML file with one diagram per flow (nav graph). Screens are
+laid out left to right in navigation order by a layered layout that keeps
+lines from crossing; destinations in another flow appear as dashed cards at
+the right. Each screen is drawn as its actual wireframe (not a placeholder
+box), with arrows leaving the button that triggers them. Hover a
 screen for its source file/class/element list; hover a button for its
 target, trigger method, any guard condition found in source, and (if you
 ran the optional API-chain resolver) the API it calls. Export the whole
@@ -74,15 +76,63 @@ A pre-generated example output from Google's public
 convention) is included at `examples/nowinandroid.nav3.json` — run it
 through `render-flow-wireframes.mjs` yourself to see the render step alone.
 
-## Using it via Claude Code
+### Figma board (shared with the iOS HLDGen)
 
-With the skill installed, just ask Claude Code:
+The same data can be drawn in Figma by the
+[HLDGen](https://github.com/Ntpstv/HLDGen) Figma plugin, built for iOS. Convert
+the output to an HLDGen bundle:
 
-> "Generate an HLD for this Android module's navigation flow"
+```bash
+node scripts/to-hldgen-bundle.mjs --nav-json /tmp/nav.json --xml-ui-json /tmp/ui.json --buttons-json /tmp/buttons.json --strings "$SRC/res/values/strings.xml" --module NavigationBasicSample --out /tmp/bundle.json
+```
 
-Claude Code reads `SKILL.md`, runs the pipeline itself, and hands you the
-finished HTML — it does not read your source files to "understand" the
-navigation graph; the scripts do that deterministically.
+Fetch the plugin once (pinned to the HLDGen commit the bundle format matches,
+checked out under `.cache/HLDGen`):
+
+```bash
+node scripts/get-hldgen-plugin.mjs
+```
+
+Then in the Figma desktop app: Plugins → Development → Import plugin from
+manifest…, pick the `manifest.json` path it printed, run
+**HLDGen — Scene Importer**, and paste `/tmp/bundle.json`. The plugin draws
+some text light grey, so set the page background to a dark color first
+(click an empty spot on the canvas → **Page** in the right panel). You get one journey
+per nav graph, screens laid out left to right in flow order, decision diamonds
+where a screen branches, and a GOES TO panel on each screen that links to its
+destinations. The plugin has no API, notification or storage data for Android
+screens; those panels stay empty. A ready-made bundle for NavigationBasicSample
+is at `examples/navigationbasicsample.hldgen-bundle.json` if you just want to
+try the plugin.
+
+## Outputs, and how to ask for each
+
+Every output is built from the same extracted JSON (`nav.json`, `ui.json`,
+`buttons.json`), so they always agree with each other. With the skill
+installed, ask Claude Code in plain words; it reads `SKILL.md`, runs the
+scripts, and hands you the file. It does not read your source files to
+"understand" the navigation; the scripts do that.
+
+| Output | Ask Claude Code | Script (after the extraction steps in Quickstart) |
+|---|---|---|
+| **Interactive HLD canvas** (default): one diagram per flow, real wireframes, hover tooltips, SVG/PNG export | "Generate an HLD for this Android module" | `render-flow-wireframes.mjs --nav-json … --xml-ui-json … --buttons-json … --out hld.html` |
+| **Figma board**, drawn by the iOS HLDGen plugin | "Make an HLD of this module for Figma" | `to-hldgen-bundle.mjs … --out bundle.json`, then `get-hldgen-plugin.mjs` (see [Figma board](#figma-board-shared-with-the-ios-hldgen)) |
+| **Layout preview**: plain name cards per flow and a crossing count, no wireframes or hover; for checking the layout only | "Show me just the flow layout" | `layout-flows.mjs --nav-json nav.json --out layout.json --preview layout.html` |
+| **Wireframe gallery**: every screen's wireframe on its own, no flow | "Show me the wireframe of every screen" | `render-wireframe.mjs --xml-ui-json ui.json --nav-json nav.json --buttons-json buttons.json --out wireframes.html` |
+| **archify diagram**, validated by the separate [archify](https://github.com/tt-a1i/archify) skill | "Draw this flow with archify" | `to-archify.mjs --nav-json nav.json --buttons-json buttons.json --out draft.json`, then archify's `validate`/`deliver` |
+| **API chain of a screen**: its ViewModel → UseCase → Repository → Service files, then the endpoint | "Which API does the X screen call?" | `resolve-api-chain-paths.mjs --nav-json nav.json --repo-root . --out api.json`; pass `--api-json api.json` to the canvas to show it on hover |
+| **Answers, no diagram**: "what leads to X", "what does this button do", "which navigation couldn't be resolved" | Ask the question | Answered from `nav.json` / `buttons.json`; every code edge cites `file:line`, and `codeNav.unmatchedNavCalls` lists what no rule could resolve |
+
+Useful additions to any request:
+
+- **A whole app or one module**: name the module ("…for the `:feature:checkout` module").
+- **Screen titles**: "use the strings file" → `--strings res/values/strings.xml` resolves `@string/…` labels.
+- **Project without a nav graph** (Fragments swapped by `FragmentManager`):
+  `extract-code-nav.mjs --src <module>/src/main --out nav.json` without
+  `--nav-json` still finds the transactions.
+- **Team-specific navigation helpers**: ask "review the navigation census". Claude
+  reads only the call sites no rule resolved and proposes a `.hld-rules.json`
+  for your repo (see `SKILL.md`, Step 0).
 
 ## Limitations
 
