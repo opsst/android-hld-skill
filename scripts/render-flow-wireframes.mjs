@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 /**
- * Combines the two views built earlier: the HLD flow layout (screens placed
- * by BFS depth from the nav graph's start destination — same logic as
- * to-archify.mjs) and the per-screen wireframe (render-wireframe.mjs) — so
- * each node IN the flow diagram is the actual screen mockup, connected by
- * arrows labeled with the button that triggers each transition.
+ * The HLD canvas: one section per flow, laid out by `layout-flows.mjs`
+ * (layered, crossing-minimised, destinations outside the flow as ghost cards),
+ * where each node is the screen's actual wireframe (render-wireframe.mjs style)
+ * and arrows are labeled with the button that triggers each transition.
  *
  * This bypasses archify entirely — archify's node schema has no room for an
  * embedded custom graphic per node (label/sublabel/tag only), so the merged
@@ -18,6 +17,7 @@
  */
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { layoutFlows, curvePath } from './layout-flows.mjs';
 
 function parseArgs(argv) {
   const out = {};
@@ -79,8 +79,10 @@ const TYPE_STYLE = {
 const PHONE_W = 240;
 const ROW_H = 42;
 const PAD = 12;
-const COL_GAP = 170;
-const ROW_GAP = 64;
+const GHOST_W = 240;
+const GHOST_H = 64;
+const FLOW_TITLE_H = 44;
+const FLOW_GAP = 36;
 
 /** Build a phone's inner markup (no outer <svg>, so it can be embedded in a
  *  <g transform="translate(...)"> at an arbitrary canvas position) plus its
@@ -89,6 +91,7 @@ function buildPhoneGroup(screenId, elements, buttonInfoById) {
   const rows = elements.filter((e) => e.type);
   let y = 40 + PAD;
   const parts = [];
+  const anchors = {}; // buttonId -> y of its centre, where its arrow leaves the card
   const svgH = rows.length * (ROW_H + 8) + PAD * 2 + 40 || 100;
 
   // Card body — archify's node glow: soft cyan drop-shadow behind a dark
@@ -114,6 +117,7 @@ function buildPhoneGroup(screenId, elements, buttonInfoById) {
       parts.push(`<text x="${PAD}" y="${y + 15}" font-family="Inter, sans-serif" font-size="10" fill="${style.textColor}">${esc(truncate(label, 26))}</text>`);
     } else if (style.shape === 'button') {
       const info = buttonInfoById?.[el.id];
+      anchors[el.id] = y + 14;
       const btnParts = [];
       btnParts.push(`<rect x="${PAD}" y="${y}" width="${rowW}" height="28" rx="7" fill="${style.fill}" stroke="${style.stroke}" stroke-width="1.2"/>`);
       btnParts.push(`<text x="${PHONE_W / 2}" y="${y + 18}" text-anchor="middle" font-family="Inter, sans-serif" font-size="10" font-weight="600" fill="${style.textColor}">${esc(truncate(label, 22))}</text>`);
@@ -153,17 +157,16 @@ function buildPhoneGroup(screenId, elements, buttonInfoById) {
     y += ROW_H;
   }
 
-  return { inner: parts.join(''), width: PHONE_W, height: svgH };
+  return { inner: parts.join(''), width: PHONE_W, height: svgH, anchors };
 }
 
-/** Vector arrow between two phone boxes, in canvas coordinates — bounding-box
- *  local vertices, same technique used in the Figma plugin (Figma required
- *  it; here it's just a clean way to draw a curved connector in plain SVG). */
-function buildArrowPath(x1, y1, x2, y2) {
-  const bend = Math.max(40, Math.abs(x2 - x1) * 0.4);
-  const c1x = x1 + bend;
-  const c2x = x2 - bend;
-  return `M ${x1} ${y1} C ${c1x} ${y1}, ${c2x} ${y2}, ${x2} ${y2}`;
+/** A screen that lives in another flow: a dashed card naming it and its flow. */
+function buildGhostCard(label, flow) {
+  return (
+    `<rect x="0" y="0" width="${GHOST_W}" height="${GHOST_H}" rx="12" fill="${PALETTE.bg}" stroke="${PALETTE.textFaint}" stroke-dasharray="5 4"/>` +
+    `<text x="14" y="27" font-family="'JetBrains Mono', monospace" font-size="10" font-weight="600" fill="${PALETTE.textDim}">${esc(truncate(label, 32))}</text>` +
+    `<text x="14" y="46" font-family="'JetBrains Mono', monospace" font-size="9" fill="${PALETTE.textFaint}">→ ${esc(flow || 'other flow')}</text>`
+  );
 }
 
 function main() {
@@ -179,94 +182,63 @@ function main() {
   const xmlUi = JSON.parse(readFileSync(args['xml-ui-json'], 'utf-8'));
   const buttonsData = JSON.parse(readFileSync(args['buttons-json'], 'utf-8'));
 
-  const startId = nav.files?.[0]?.startDestination || nav.nodes[0]?.id;
-
-  // Same BFS-depth column assignment as to-archify.mjs.
-  const adjacency = new Map();
-  for (const e of nav.edges) {
-    if (!adjacency.has(e.from)) adjacency.set(e.from, []);
-    adjacency.get(e.from).push(e.to);
-  }
-  const depth = new Map([[startId, 0]]);
-  const queue = [startId];
-  while (queue.length) {
-    const cur = queue.shift();
-    for (const next of adjacency.get(cur) || []) {
-      if (!depth.has(next)) {
-        depth.set(next, depth.get(cur) + 1);
-        queue.push(next);
-      }
-    }
-  }
-  const maxDepth = Math.max(0, ...depth.values());
-  for (const n of nav.nodes) if (!depth.has(n.id)) depth.set(n.id, maxDepth + 1);
-
-  const byCol = new Map();
-  for (const n of nav.nodes) {
-    const c = depth.get(n.id);
-    if (!byCol.has(c)) byCol.set(c, []);
-    byCol.get(c).push(n.id);
-  }
-
   const elementsByLayout = new Map();
   for (const l of xmlUi.layouts || []) elementsByLayout.set(l.layoutFile, l.elements || []);
   const buttonsByScreen = new Map();
   for (const s of buttonsData.screens || []) buttonsByScreen.set(s.screenId, s.buttons || []);
 
-  // Build every phone group first so we know each one's real height before
-  // laying out row Y positions (heights vary — a screen with 6 fields is
-  // taller than a title screen with 2 buttons).
-  const built = new Map(); // id -> { inner, width, height, col, row }
-  for (const [col, ids] of byCol) {
-    ids.forEach((id, row) => {
-      const node = nav.nodes.find((n) => n.id === id);
-      let elements = [];
-      if (node.layout) {
-        for (const [layoutFile, els] of elementsByLayout) {
-          if (layoutFile.includes(node.layout)) {
-            elements = els;
-            break;
-          }
+  // Build every wireframe first: its real height (a screen with ten fields is
+  // taller than one with two) is what the layered layout stacks columns with.
+  const built = new Map(); // id -> { inner, width, height }
+  for (const node of nav.nodes) {
+    let elements = [];
+    if (node.layout) {
+      for (const [layoutFile, els] of elementsByLayout) {
+        if (layoutFile.includes(node.layout)) {
+          elements = els;
+          break;
         }
       }
-      const buttonInfoById = {};
-      for (const b of buttonsByScreen.get(id) || []) {
-        if (b.action?.type === 'navigate') {
-          buttonInfoById[b.id] = {
-            caption: b.action.guard ? `🔒 if (${truncate(b.action.guard, 22)}) → ${b.action.target}` : `→ ${b.action.target}`,
-            color: b.action.guard ? PALETTE.warn : PALETTE.ok,
-          };
-        } else if (b.action?.type === 'unresolved') {
-          buttonInfoById[b.id] = { caption: `⚠ ${truncate(b.action.reason, 26)}`, color: PALETTE.danger };
-        }
+    }
+    const buttonInfoById = {};
+    for (const b of buttonsByScreen.get(node.id) || []) {
+      if (b.action?.type === 'navigate') {
+        buttonInfoById[b.id] = {
+          caption: b.action.guard ? `🔒 if (${truncate(b.action.guard, 22)}) → ${b.action.target}` : `→ ${b.action.target}`,
+          color: b.action.guard ? PALETTE.warn : PALETTE.ok,
+        };
+      } else if (b.action?.type === 'unresolved') {
+        buttonInfoById[b.id] = { caption: `⚠ ${truncate(b.action.reason, 26)}`, color: PALETTE.danger };
       }
-      const group = buildPhoneGroup(id, elements, buttonInfoById);
-      built.set(id, { ...group, col, row });
-    });
+    }
+    built.set(node.id, buildPhoneGroup(node.kind === 'activity' ? node.label || node.id : node.id, elements, buttonInfoById));
   }
 
-  // Row Y offsets: uniform slot height per row index, sized to the tallest
-  // phone at that row across all columns, so rows don't overlap.
-  const maxRowIndex = Math.max(...[...built.values()].map((b) => b.row));
-  const rowHeights = [];
-  for (let r = 0; r <= maxRowIndex; r++) {
-    const heights = [...built.values()].filter((b) => b.row === r).map((b) => b.height);
-    rowHeights.push(Math.max(...heights, 100));
-  }
-  const rowY = [0];
-  for (let r = 1; r <= maxRowIndex; r++) rowY.push(rowY[r - 1] + rowHeights[r - 1] + ROW_GAP);
+  const flows = layoutFlows(nav, (n) => (n.ghost ? { w: GHOST_W, h: GHOST_H } : { w: PHONE_W, h: built.get(n.id).height }));
 
-  const pos = new Map(); // id -> {x, y}
-  for (const [id, b] of built) {
-    pos.set(id, { x: b.col * (PHONE_W + COL_GAP) + 40, y: rowY[b.row] + 40 });
+  // One section per flow, stacked top to bottom, each under its own title.
+  const cards = [];
+  const placed = []; // { flow, dy }
+  let offsetY = 16;
+  for (const f of flows) {
+    const screens = f.nodes.filter((n) => !n.ghost).length;
+    cards.push(
+      `<text x="40" y="${offsetY + 26}" font-family="'JetBrains Mono', monospace" font-size="15" font-weight="600" fill="${PALETTE.text}">${esc(f.title)}</text>` +
+        `<text x="40" y="${offsetY + 42}" font-family="'JetBrains Mono', monospace" font-size="10" fill="${PALETTE.textFaint}">${screens} screens · ${f.edges.length} connections</text>`,
+    );
+    const dy = offsetY + FLOW_TITLE_H;
+    for (const n of f.nodes) {
+      const t = `translate(${n.x},${n.y + dy})`;
+      cards.push(
+        n.ghost
+          ? `<g class="node-card ghost-card" data-screen="${esc(n.target)}" transform="${t}">${buildGhostCard(n.label, n.flow)}</g>`
+          : `<g class="node-card" data-screen="${esc(n.id)}" transform="${t}">${built.get(n.id).inner}</g>`,
+      );
+    }
+    placed.push({ flow: f, dy });
+    offsetY = dy + f.height + FLOW_GAP;
   }
-
-  const groups = [...built.entries()]
-    .map(([id, b]) => {
-      const p = pos.get(id);
-      return `<g class="node-card" data-screen="${esc(id)}" transform="translate(${p.x},${p.y})">${b.inner}</g>`;
-    })
-    .join('\n');
+  const groups = cards.join('\n');
 
   // Optional Tier-1 API-chain resolution (resolve-api-chain-paths.mjs output,
   // only meaningful for repos following its UseCase/Repository/Service
@@ -309,9 +281,6 @@ function main() {
   }
 
   for (const screen of buttonsData.screens || []) {
-    const fromPos = pos.get(screen.screenId);
-    const fromH = built.get(screen.screenId)?.height || 100;
-
     const outgoingSummary = [];
     for (const btn of screen.buttons || []) {
       const key = `${screen.screenId}::${btn.id}`;
@@ -340,48 +309,56 @@ function main() {
       }));
     }
 
-    if (!fromPos) continue;
-    const allActions = [
-      ...(screen.buttons || [])
-        .filter((b) => b.action?.type === 'navigate')
-        .map((b) => ({ action: b.action, label: b.label, buttonId: b.id })),
-      ...(screen.screenLevelActions || []).filter((a) => a.target).map((a) => ({ action: a, label: null, buttonId: null })),
-    ];
-    for (const a of allActions) {
-      const target = a.action.target;
-      const toPos = pos.get(target);
-      if (!toPos) continue;
-      const toH = built.get(target)?.height || 100;
-      const x1 = fromPos.x + PHONE_W;
-      const y1 = fromPos.y + fromH / 2;
-      const x2 = toPos.x;
-      const y2 = toPos.y + toH / 2;
-      const guarded = a.action?.guard;
-      const stroke = guarded ? PALETTE.warn : PALETTE.frontend;
-      const edgeId = `edge__${safeAttr(screen.screenId)}__${safeAttr(a.buttonId || a.action.via || target)}`;
+  }
+
+  // Arrows: every edge of every flow, drawn along the route the layout
+  // computed. A button that triggers an edge labels it and owns it for hover.
+  const buttonsOnEdge = new Map(); // "from|to" -> [{ id, label, guard }]
+  for (const s of buttonsData.screens || []) {
+    for (const b of s.buttons || []) {
+      if (b.action?.type !== 'navigate' || !b.action.target) continue;
+      const k = `${s.screenId}|${b.action.target}`;
+      (buttonsOnEdge.get(k) || buttonsOnEdge.set(k, []).get(k)).push({ id: b.id, label: b.label || b.id, guard: b.action.guard });
+    }
+  }
+  for (const { flow, dy } of placed) {
+    const nodeAt = new Map(flow.nodes.map((n) => [n.id, n]));
+    for (const e of flow.edges) {
+      const to = e.to.startsWith('ghost:') ? e.to.slice('ghost:'.length) : e.to;
+      const btns = buttonsOnEdge.get(`${e.from}|${to}`) || [];
+      const guarded = btns.some((b) => b.guard);
+      const stroke = e.back ? PALETTE.textDim : guarded ? PALETTE.warn : PALETTE.frontend;
+      const edgeId = `edge__${safeAttr(flow.id)}__${safeAttr(e.from)}__${safeAttr(e.to)}`;
+      const pts = e.points.map(([x, y]) => [x, y + dy]);
+      // Like a sticky note per action: a button-triggered arrow leaves the
+      // card from that button, so sibling arrows don't share one start point.
+      const anchorY = !e.back && btns.length && built.get(e.from)?.anchors?.[btns[0].id];
+      if (anchorY) pts[0] = [pts[0][0], nodeAt.get(e.from).y + dy + anchorY];
       arrows.push(
-        `<path id="${edgeId}" class="flow-edge" data-from="${esc(screen.screenId)}" data-to="${esc(target)}" data-button="${esc(a.buttonId || '')}" ` +
-          `d="${buildArrowPath(x1, y1, x2, y2)}" fill="none" stroke="${stroke}" stroke-width="2" marker-end="url(${guarded ? '#arrowWarn' : '#arrow'})" filter="url(#lineGlow)" ${guarded ? 'stroke-dasharray="6 5"' : ''}/>`,
+        `<path id="${edgeId}" class="flow-edge" data-from="${esc(e.from)}" data-to="${esc(to)}" ` +
+          `d="${curvePath(pts)}" fill="none" stroke="${stroke}" stroke-width="2" marker-end="url(${guarded ? '#arrowWarn' : '#arrow'})" filter="url(#lineGlow)" ${guarded || e.back ? 'stroke-dasharray="6 5"' : ''}/>`,
       );
-      if (a.buttonId) {
-        const key = `${screen.screenId}::${a.buttonId}`;
+      for (const b of btns) {
+        const key = `${e.from}::${b.id}`;
         if (buttonMeta[key]) buttonMeta[key].edgeId = edgeId;
       }
-      const mx = (x1 + x2) / 2;
-      const my = (y1 + y2) / 2;
-      const text = a.label || target;
-      const w = Math.min(140, Math.max(46, text.length * 5.6 + 16));
+      // An arrow leaving a button needs no label — the button and its
+      // "→ target" caption already say it. Only unanchored ones get one.
+      if (!btns.length || anchorY) continue;
+      const text = truncate(btns.map((b) => b.label).join(' / '), 16);
+      const w = Math.max(46, text.length * 5.6 + 16);
+      const [x, y] = pts[0];
       arrowLabels.push(
-        `<g class="edge-label" data-edge="${edgeId}" transform="translate(${mx - w / 2},${my - 10})">` +
-          `<rect width="${w}" height="20" rx="10" fill="${PALETTE.panel}" stroke="${stroke}" stroke-opacity="0.5"/>` +
-          `<text x="${w / 2}" y="14" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="9" fill="${guarded ? '#fde68a' : '#a5f3fc'}">${esc(truncate(text, 20))}</text>` +
+        `<g class="edge-label" data-edge="${edgeId}" transform="translate(${x + 8},${y - 22})">` +
+          `<rect width="${w}" height="18" rx="9" fill="${PALETTE.panel}" stroke="${stroke}" stroke-opacity="0.5"/>` +
+          `<text x="${w / 2}" y="12.5" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="9" fill="${guarded ? '#fde68a' : '#a5f3fc'}">${esc(text)}</text>` +
           `</g>`,
       );
     }
   }
 
-  const canvasW = (Math.max(...byCol.keys()) + 1) * (PHONE_W + COL_GAP) + 60;
-  const canvasH = rowY[maxRowIndex] + rowHeights[maxRowIndex] + 60;
+  const canvasW = Math.max(600, ...flows.map((f) => f.width));
+  const canvasH = offsetY;
   const fileSlug = (args.title || 'screen-flow').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'screen-flow';
 
   const resolvedCount = (buttonsData.screens || []).reduce(
@@ -475,10 +452,10 @@ function main() {
 <header>
   <h1>${esc(args.title || 'Screen Flow + Wireframes')}</h1>
   <p class="sub">
-    Same navigation flow as the HLD diagram (BFS-depth columns from the start
-    screen — identical layout logic to the archify version), but each node is
-    the real screen wireframe instead of a plain label, and each arrow is
-    annotated with the button/action that triggers it.
+    One diagram per flow, left to right in navigation order. Each card is the
+    screen's real wireframe; dashed cards on the right live in another flow.
+    Arrows are labeled with the button that triggers them — hover a screen or
+    a button for details.
   </p>
   <div class="legend">
     <span class="chip ok"><span class="dot"></span>Resolved navigate <b>${resolvedCount}</b></span>
@@ -501,7 +478,9 @@ function main() {
       <feGaussianBlur stdDeviation="6" result="blur"/>
       <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
-    <filter id="lineGlow" x="-40%" y="-40%" width="180%" height="180%">
+    <!-- userSpaceOnUse: a perfectly straight edge has a zero-height bounding
+         box, and a bbox-relative filter region would make it vanish. -->
+    <filter id="lineGlow" filterUnits="userSpaceOnUse" x="0" y="0" width="${canvasW}" height="${canvasH}">
       <feGaussianBlur stdDeviation="2.2" result="blur"/>
       <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
