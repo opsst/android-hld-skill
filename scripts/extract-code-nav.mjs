@@ -15,10 +15,14 @@
  *                   catches team-specific wrappers (`next(R.id.action_x)`,
  *                   `goTo(R.id.x)`) without anyone writing a rule for them.
  *                   `pop*`/`findFragmentById`-style calls are excluded.
- *   2. intent       `Intent(ctx, XActivity::class.java)` → edge to Activity X.
+ *   2. intent       `Intent(ctx, XActivity::class.java)` and `XActivity.start(…)`
+ *                   companion factories → edge to Activity X.
  *   3. hosts-graph  An Activity that inflates `R.navigation.<g>` (code) or whose
  *                   layout declares `app:navGraph="@navigation/<g>"` hosts that
  *                   graph → edge Activity → the graph's startDestination.
+ *   4. fragment-transaction  FragmentManager `replace`/`add` in a transaction
+ *                   chain or `commit { }` block → edge to that Fragment. Works
+ *                   without any nav graph, so `--nav-json` is optional.
  *
  * Team conventions the built-ins can't see go in an optional rules file
  * (`--rules .hld-rules.json`), kept in the analyzed repo, not in this skill:
@@ -60,14 +64,18 @@ const NON_NAV_CALL = /^(pop\w*|popBackStack|findFragmentById|findViewById|getIte
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
-  if (!args['nav-json'] || !args.src || !args.out) {
+  if (!args.src || !args.out) {
     console.error(
-      'Usage: node extract-code-nav.mjs --nav-json <nav.json> --src <module>/src/main [--rules .hld-rules.json] --out <merged.json>',
+      'Usage: node extract-code-nav.mjs [--nav-json <nav.json>] --src <module>/src/main [--rules .hld-rules.json] --out <merged.json>',
     );
     process.exit(1);
   }
 
-  const nav = JSON.parse(readFileSync(args['nav-json'], 'utf-8'));
+  // No nav graph (e.g. an app that only swaps Fragments via FragmentManager)
+  // is fine: start from an empty graph and let the code rules build it.
+  const nav = args['nav-json']
+    ? JSON.parse(readFileSync(args['nav-json'], 'utf-8'))
+    : { nodes: [], edges: [], files: [] };
   const customRules = args.rules ? JSON.parse(readFileSync(args.rules, 'utf-8')).navigate || [] : [];
 
   const actionMap = new Map((nav.edges || []).filter((e) => e.actionId).map((e) => [e.actionId, e]));
@@ -92,30 +100,38 @@ function main() {
     for (const m of readFileSync(file, 'utf-8').matchAll(/\bfun\s+(?:<[^>]+>\s*)?(?:\w+\.)?(\w+)\s*\(/g)) definedFns.add(m[1]);
   }
 
-  const moduleActivities = new Set(
-    files.map((f) => basename(f).replace(/\.(kt|java)$/, '')).filter((c) => /Activity$/.test(c)),
-  );
+  const classFile = new Map(files.map((f) => [basename(f).replace(/\.(kt|java)$/, ''), f]));
+  const moduleActivities = new Set([...classFile.keys()].filter((c) => /Activity$/.test(c)));
+  const moduleFragments = new Set([...classFile.keys()].filter((c) => /Fragment$/.test(c)));
+  const fqnOf = (cls) => {
+    const f = classFile.get(cls);
+    const pkg = f && readFileSync(f, 'utf-8').match(/^\s*package\s+([\w.]+)/m)?.[1];
+    return pkg ? `${pkg}.${cls}` : cls;
+  };
 
-  const activityNodes = new Map();
-  const ensureActivity = (cls, fqn) => {
+  // Screens the nav graph doesn't declare (Activities, Fragments swapped in via
+  // FragmentManager). Only the ones some edge touches end up in the output.
+  const extraNodes = new Map();
+  const ensureScreen = (cls, kind) => {
     if (nodeByClass.has(cls)) return nodeByClass.get(cls).id;
-    if (!activityNodes.has(cls)) {
-      activityNodes.set(cls, { id: cls, kind: 'activity', className: fqn || cls, label: cls, layout: null, sourceFile: null });
-    } else if (fqn && activityNodes.get(cls).className === cls) {
-      activityNodes.get(cls).className = fqn;
+    if (!extraNodes.has(cls)) {
+      extraNodes.set(cls, { id: cls, kind, className: fqnOf(cls), label: cls, layout: null, sourceFile: null });
     }
     return cls;
   };
+  const ensureActivity = (cls) => ensureScreen(cls, 'activity');
 
-  const ownerOf = (cls, fqn) => {
+  const ownerOf = (cls) => {
     if (nodeByClass.has(cls)) return nodeByClass.get(cls).id;
-    if (/Activity$/.test(cls)) return ensureActivity(cls, fqn);
+    if (/Activity$/.test(cls)) return ensureActivity(cls);
+    if (moduleFragments.has(cls)) return ensureScreen(cls, 'fragment');
     const base = cls.replace(/ViewModel$/, '');
     if (base !== cls) {
       for (const suffix of ['Fragment', 'Activity']) {
         if (nodeByClass.has(base + suffix)) return nodeByClass.get(base + suffix).id;
       }
       if (moduleActivities.has(base + 'Activity')) return ensureActivity(base + 'Activity');
+      if (moduleFragments.has(base + 'Fragment')) return ensureScreen(base + 'Fragment', 'fragment');
     }
     return null;
   };
@@ -151,6 +167,18 @@ function main() {
     // a navigation call can't be told statically — count it, don't attribute it.
     const isBaseClass = new RegExp(`\\b(abstract|open)\\s+class\\s+${cls}\\b`).test(src);
     const owner = isBaseClass ? null : ownerOf(cls, fqn);
+    // When the file name isn't a screen (e.g. `XFragment+DetailView.kt`, a file
+    // of extension functions), the nearest enclosing extension receiver
+    // (`fun XFragment.setup()`) or class declaration says whose code it is.
+    const enclosing = [
+      ...src.matchAll(/\b(?:(abstract|open)\s+)?class\s+([A-Z]\w*)|\bfun\s+(?:<[^>]+>\s*)?([A-Z]\w*)\.\w+\s*\(/g),
+    ];
+    const ownerAt = (index) => {
+      if (owner || isBaseClass) return owner;
+      const decl = enclosing.filter((d) => d.index < index).at(-1);
+      if (!decl || decl[1]) return null;
+      return ownerOf(decl[2] || decl[3]);
+    };
 
     // 1. id-ref / id-mention — a known navigation id referenced in code.
     //    As a call's first argument it's a navigation call (id-ref); anywhere
@@ -164,31 +192,96 @@ function main() {
       if (/(==|!=)\s*$/.test(prefix)) continue;
       const call = prefix.match(/(\w+)\s*\(\s*$/)?.[1];
       if (call && NON_NAV_CALL.test(call)) continue;
-      if (!owner) {
+      const o = ownerAt(m.index);
+      if (!o) {
         unattributed++;
         continue;
       }
-      addEdge(owner, actionMap.has(id) ? actionMap.get(id).to : id, call ? 'id-ref' : 'id-mention', file, src, m.index);
+      addEdge(o, actionMap.has(id) ? actionMap.get(id).to : id, call ? 'id-ref' : 'id-mention', file, src, m.index);
     }
 
     // 2. intent — explicit Activity launch.
     for (const m of src.matchAll(/Intent\s*\([^;]*?(\w+Activity)::class\.java/g)) {
-      if (!owner) {
+      const o = ownerAt(m.index);
+      if (!o) {
         unattributed++;
         continue;
       }
-      addEdge(owner, ensureActivity(m[1]), 'intent', file, src, m.index);
+      addEdge(o, ensureActivity(m[1]), 'intent', file, src, m.index);
     }
 
     // 2b. activity-factory — `XActivity.start(ctx)` / `.newIntent(` / `.openFrom(`:
     //     the Intent lives in X's own companion, so the launch site is the call.
     for (const m of src.matchAll(/\b(\w+Activity)\s*\.\s*(\w*(?:start|[Ii]ntent|open|launch|show)\w*)\s*\(/g)) {
       if (m[1] === cls) continue;
-      if (!owner) {
+      const o = ownerAt(m.index);
+      if (!o) {
         unattributed++;
         continue;
       }
-      addEdge(owner, ensureActivity(m[1]), 'activity-factory', file, src, m.index);
+      addEdge(o, ensureActivity(m[1]), 'activity-factory', file, src, m.index);
+    }
+
+    // 2c. fragment-transaction — FragmentManager `replace`/`add`, no nav graph
+    //     involved: `.replace(R.id.c, XFragment())`, `XFragment.newInstance(…)`,
+    //     `XFragment::class.java`, KTX `replace<XFragment>(…)`, or a variable
+    //     whose declaration in the same file names the Fragment type.
+    // A replace/add only counts when it is part of a FragmentTransaction:
+    // chained off `beginTransaction()` (every line in between continues the
+    // chain with `.`), or inside a `commit { }` / `beginTransaction().apply { }`
+    // block. Being merely *near* one — `list.add(i, x)` on the next line — isn't.
+    const inTransaction = (index, dotted) => {
+      const before = src.slice(Math.max(0, index - 800), index);
+      // `val ft = fm.beginTransaction()` … `ft.replace(…)`
+      const receiver = dotted && before.match(/(\w+)\s*$/)?.[1];
+      if (receiver && new RegExp(`\\b${receiver}\\s*=\\s*[^;\\n]*beginTransaction\\s*\\(`).test(src.slice(0, index))) {
+        return true;
+      }
+      const bt = before.lastIndexOf('beginTransaction');
+      if (dotted && bt !== -1) {
+        const chain = before.slice(bt);
+        if (!chain.includes(';') && chain.split('\n').slice(1).every((l) => /^\s*(\.|$)/.test(l))) return true;
+      }
+      const blocks = [...before.matchAll(/(?:commit\w*|beginTransaction\(\)\s*\.\s*(?:apply|run))\s*\{/g)];
+      if (!blocks.length) return false;
+      const body = before.slice(blocks.at(-1).index + blocks.at(-1)[0].length);
+      return (body.match(/\{/g) || []).length >= (body.match(/\}/g) || []).length;
+    };
+    const fragmentTargets = [];
+    for (const m of src.matchAll(/(\.\s*)?\b(replace|add)\s*<\s*([A-Z]\w*Fragment)\s*>\s*\(/g)) {
+      if (!inTransaction(m.index, !!m[1])) continue;
+      fragmentTargets.push({ cls: m[3], index: m.index, call: m[2] });
+    }
+    for (const m of src.matchAll(/(\.\s*)?\b(replace|add)\s*\(\s*([^,()"]+?)\s*,\s*([\w.]+)/g)) {
+      if (!inTransaction(m.index, !!m[1])) continue;
+      const call = m[2];
+      const arg = m[4];
+      let cls = arg.match(/^([A-Z]\w*Fragment)\b/)?.[1];
+      if (!cls && /^[a-z_]\w*$/.test(arg)) {
+        const before = src.slice(0, m.index);
+        const decls = [
+          ...before.matchAll(new RegExp(`\\b(\\w+Fragment)\\s+${arg}\\s*=`, 'g')),
+          ...before.matchAll(new RegExp(`\\bva[lr]\\s+${arg}\\s*(?::\\s*\\w+)?\\s*=\\s*(?:new\\s+)?(\\w+Fragment)\\b`, 'g')),
+        ].sort((a, b) => a.index - b.index);
+        cls = decls.at(-1)?.[1];
+      }
+      if (cls) {
+        fragmentTargets.push({ cls, index: m.index, call });
+      } else {
+        const key = `FragmentManager.${call}`;
+        if (!unmatched.has(key)) unmatched.set(key, { call: key, count: 0, examples: [] });
+        const u = unmatched.get(key);
+        u.count++;
+        if (u.examples.length < 3) u.examples.push(`${relative(args.src, file)}:${lineOf(src, m.index)}`);
+      }
+    }
+    for (const t of fragmentTargets) {
+      const o = ownerAt(t.index);
+      if (!o) {
+        unattributed++;
+        continue;
+      }
+      addEdge(o, ensureScreen(t.cls, 'fragment'), 'fragment-transaction', file, src, t.index);
     }
 
     // 3. hosts-graph — Activity → start destination of each graph it hosts.
@@ -224,11 +317,12 @@ function main() {
       for (const m of src.matchAll(new RegExp(rule.pattern, 'g'))) {
         const to = resolveCapture(rule.capture, m[1]);
         if (!to) continue;
-        if (!owner) {
+        const o = ownerAt(m.index);
+        if (!o) {
           unattributed++;
           continue;
         }
-        addEdge(owner, to, `rule:${rule.name}`, file, src, m.index);
+        addEdge(o, to, `rule:${rule.name}`, file, src, m.index);
       }
     }
   }
@@ -245,8 +339,8 @@ function main() {
   const touched = new Set(merged.flatMap((e) => [e.from, e.to]));
   // An Activity only becomes a screen when some edge reaches or leaves it —
   // otherwise every `*Activity` file (base classes included) would show up.
-  const usedActivities = [...activityNodes.values()].filter((a) => touched.has(a.id));
-  const nodes = [...nav.nodes, ...usedActivities];
+  const usedExtra = [...extraNodes.values()].filter((a) => touched.has(a.id));
+  const nodes = [...nav.nodes, ...usedExtra];
   const orphanNodes = nodes.filter((n) => !touched.has(n.id)).map((n) => n.id);
 
   const output = {
@@ -259,7 +353,15 @@ function main() {
     edges: merged,
     orphanNodes,
     codeNav: {
-      rulesApplied: ['id-ref', 'intent', 'hosts-graph', ...customRules.map((r) => `rule:${r.name}`)],
+      rulesApplied: [
+        'id-ref',
+        'id-mention',
+        'intent',
+        'activity-factory',
+        'fragment-transaction',
+        'hosts-graph',
+        ...customRules.map((r) => `rule:${r.name}`),
+      ],
       matchesPerRule: perRule,
       newEdges: merged.length - (nav.edges || []).length,
       unattributedMatches: unattributed,
@@ -270,7 +372,7 @@ function main() {
   mkdirSync(dirname(args.out), { recursive: true });
   writeFileSync(args.out, JSON.stringify(output, null, 2));
   console.log(
-    `✓ ${nodes.length} screens (+${usedActivities.length} activities), ${merged.length} edges (+${output.codeNav.newEdges} from code), ${orphanNodes.length} orphan → ${args.out}`,
+    `✓ ${nodes.length} screens (+${usedExtra.filter((n) => n.kind === 'activity').length} activities, +${usedExtra.filter((n) => n.kind === 'fragment').length} fragments outside the nav graph), ${merged.length} edges (+${output.codeNav.newEdges} from code), ${orphanNodes.length} orphan → ${args.out}`,
   );
   console.log(`  matches per rule: ${JSON.stringify(perRule)}${unattributed ? `, unattributed: ${unattributed}` : ''}`);
 }

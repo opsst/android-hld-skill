@@ -33,6 +33,21 @@ the repo.
   where, under what condition, calling what API) without manually tracing
   `NavHost`/`nav_graph`/`setOnClickListener` wiring themselves.
 
+## Choosing the output
+
+Steps 1–4 (extraction) always run first; the request decides what you render
+from their JSON. When the user doesn't say, produce the canvas (step 6).
+
+| The user asks for… | Produce |
+|---|---|
+| an HLD, screen map, flow diagram (default) | step 6, `render-flow-wireframes.mjs` → `hld.html` |
+| the HLD in Figma, "same as iOS", a Figma board | step 9, `to-hldgen-bundle.mjs` + `get-hldgen-plugin.mjs` |
+| just the flow layout, a layout check | `layout-flows.mjs --nav-json nav.json --out layout.json --preview layout.html` (name cards only, no wireframes, no hover; say so) |
+| every screen's wireframe, no flow | step 7, `render-wireframe.mjs` |
+| an archify diagram | step 8, `to-archify.mjs` + archify's own `validate`/`deliver` |
+| which API a screen calls | step 5, then read only the files it lists |
+| a question ("what leads to X", "what does this button do") | answer from `nav.json` / `buttons.json`, citing each edge's `evidence`; no render |
+
 ## Pipeline
 
 Run these in order. Every script takes `--out <path>` and writes JSON (the
@@ -68,7 +83,10 @@ render step writes HTML); chain the outputs together as shown.
    Built-in rules cover standard Android patterns with no configuration: any
    code reference to an id the nav graph declares (so team wrappers like
    `next(R.id.action_x)` are caught automatically), `Intent(…, X::class.java)`,
-   `XActivity.start(…)`-style factories, and Activities hosting a nav graph.
+   `XActivity.start(…)`-style factories, Activities hosting a nav graph, and
+   FragmentManager transactions (`replace`/`add`). The last one needs no nav
+   graph, so for an `unknown` project that swaps Fragments manually, run this
+   script without `--nav-json` instead of stopping.
    Every added edge carries `rule` and `evidence` (`file:line`). Use this merged
    `nav.json` for every step below.
 
@@ -127,10 +145,12 @@ render step writes HTML); chain the outputs together as shown.
    ```bash
    node scripts/render-flow-wireframes.mjs --nav-json nav.json --xml-ui-json ui.json --buttons-json buttons.json [--api-json api.json] --title "<title>" --out hld.html
    ```
-   One self-contained HTML file: screens laid out by navigation depth (same
-   flow shape a hand-drawn HLD would have), each node is the screen's real
-   wireframe (not a placeholder box), arrows labeled with the triggering
-   button. Hovering a screen shows its class/layout/incoming edges/element
+   One self-contained HTML file with one diagram per flow (nav graph), laid
+   out by `layout-flows.mjs`: layered left to right in navigation order,
+   crossings minimised, destinations in another flow as dashed cards in a
+   last column, loops drawn as dashed lines under the flow. Each node is the
+   screen's real wireframe (not a placeholder box); arrows leave the button
+   that triggers them. Hovering a screen shows its class/layout/incoming edges/element
    list; hovering a button highlights its one arrow and shows the target,
    trigger method, any guard condition (or an honest "no guard condition
    found"), and the resolved API chain when step 5 was run (left blank
@@ -155,7 +175,20 @@ render step writes HTML); chain the outputs together as shown.
    node <archify>/bin/archify.mjs deliver workflow draft.json out.html --quality showcase
    ```
 
-9. **Report the result honestly.** Always surface screen/edge counts, and
+9. **(Optional) Figma board** via the iOS team's
+   [HLDGen](https://github.com/Ntpstv/HLDGen) Figma plugin, when the user
+   wants the HLD in Figma:
+   ```bash
+   node scripts/to-hldgen-bundle.mjs --nav-json nav.json --xml-ui-json ui.json --buttons-json buttons.json [--strings <res/values/strings.xml>] --module <name> --out bundle.json
+   ```
+   Then `node scripts/get-hldgen-plugin.mjs` fetches the plugin (pinned commit,
+   into `.cache/HLDGen`) and prints its manifest path. The user imports that
+   manifest in the Figma desktop app (Plugins → Development → Import plugin
+   from manifest…), sets the page background dark (some plugin text is light
+   grey), and pastes `bundle.json`. You can't run Figma, so hand over the paths
+   and the steps; don't claim what the board looks like.
+
+10. **Report the result honestly.** Always surface screen/edge counts, and
    any `unresolved` entries — these are real signal about navigation the
    static pass couldn't resolve (e.g. conditional/dynamic navigation), not
    something to hide. Also surface `orphanNodes` (screens with zero detected

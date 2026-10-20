@@ -1,6 +1,6 @@
 {
   "generatedBy": "extract-nav3.mjs (deterministic, no LLM) — Navigation 3 convention parser",
-  "sourceDir": "/Users/a667157/Documents/GitHub/_refs/nowinandroid",
+  "sourceDir": "nowinandroid",
   "screenCount": 5,
   "edgeCount": 6,
   "unresolvedCount": 0,
